@@ -70,18 +70,20 @@ assert inp_dim > 32
 model.eval()
 
 # %% Load in the images to be processed
-
-list_images = glob.glob(path_ProcessedData + '*.png')
+load_batch = time.time()
+#list_images = glob.glob(path_ProcessedData + '*.png')
+list_images = glob.glob(path_ProcessedData + '*.png')[0:25]
 
 loaded_images = [cv2.imread(image) for image in list_images]
+
 
 # %%
 
 im_batches = list(map(prep_image,
                       loaded_images,
-                      [inp_dim for x in range(len(list_images))]))
+                      [inp_dim] * len(list_images)))
 
-im_dim_list = [(x.shape[1], x.shape[0]) for x in loaded_images]
+im_dim_list = [(image.shape[1], image.shape[0]) for image in loaded_images]
 im_dim_list = torch.FloatTensor(im_dim_list).repeat(1, 2)
 if cuda:
     im_dim_list = im_dim_list.cuda()
@@ -92,8 +94,8 @@ if (len(im_dim_list) % batch_size):
 
 if batch_size != 1:
     num_batches = len(list_images) // batch_size + leftover
-    im_batches = [torch.cat((im_batches[i*batch_size: min((i + 1)*batch_size,
-                  len(im_batches))])) for i in range(num_batches)]
+    im_batches = [torch.cat((im_batches[batch_index*batch_size: min((batch_index + 1)*batch_size,
+                  len(im_batches))])) for batch_index in range(num_batches)]
 
 
 write = 0
@@ -137,7 +139,9 @@ for i, batch in enumerate(im_batches):
         print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
         print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
         print("----------------------------------------------------------")
-    torch.cuda.synchronize()
+
+    if cuda:
+        torch.cuda.synchronize()
 
 # %%
 
@@ -147,7 +151,9 @@ except NameError:
     print("No detections were made")
     exit()
 
-im_dim_list = torch.index_select(im_dim_list, 0, output[:, ].long())
+# %%
+
+im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
 
 scaling_factor = torch.min(inp_dim/im_dim_list, 1)[0].view(-1, 1)
 
@@ -179,15 +185,16 @@ def write(x, results):
 
 # %%
 
-list(map(lambda x: write(x, loaded_images), output))
-det_names = pd.Series(list_images).apply(lambda x: "{}/det_{}".format(det, x.split("/")[-1]))
+outputs = list(map(lambda x: write(x, loaded_images), output))
+#cv2.imshow('demo', outputs[0]); key = cv2.waitKey(1)
+det_names = pd.Series(list_images).apply(lambda x: "{}/det_{}".format(path_ProcessedData, x.split("/")[-1]))
 list(map(cv2.imwrite, det_names, loaded_images))
 end = time.time()
 print("SUMMARY")
 print("----------------------------------------------------------")
 print("{:25s}: {}".format("Task", "Time Taken (in seconds)"))
 print()
-print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
+#print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
 print("{:25s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
 print("{:25s}: {:2.3f}".format("Detection (" + str(len(list_images)) +  " images)", output_recast - start_det_loop))
 print("{:25s}: {:2.3f}".format("Output Processing", class_load - output_recast))

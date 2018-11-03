@@ -1,0 +1,7 @@
+person
+weight
+ball
+dog
+weight bench
+dumbell
+bench press bar
