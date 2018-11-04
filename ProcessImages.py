@@ -20,7 +20,8 @@ import random
 #    import torch.nn as nn
 #    import os
 #    import os.path as osp
-#    import numpy as np#import matplotlib.pyplot as plt
+import numpy as np
+#    import matplotlib.pyplot as plt
 #    from PIL import Image
 #    from torchvision import transforms, datasets
 #    from torch.utils.data import DataLoader
@@ -45,12 +46,16 @@ colors = pkl.load(open("../4Others/pallete", "rb"))
 #    det = "../2ProcessedData/"
 classes = load_classes('../4Others/coco.names')
 batch_size = 12
+# Used in filter_results to apply a confidence mask
 confidence = float(0.5)
+# Used in filter_results to remove points with IoU < nms_thesh
 nms_thesh = float(0.4)
 start = 0
 num_classes = 80
 cfg_path = "../4Others/yolov3.cfg"
 blocks = parse_cfg(cfg_path)
+
+# setup our model object from the yolo_v3.py file
 model = yolo_v3(blocks)
 model.load_weights("../4Weights/yolov3.weights")
 if cuda:
@@ -71,11 +76,12 @@ model.eval()
 
 # %% Load in the images to be processed
 load_batch = time.time()
+
 #list_images = glob.glob(path_ProcessedData + '*.png')
-list_images = glob.glob(path_ProcessedData + '*.png')[0:25]
+# Load only the first few images to test the code.
+list_images = glob.glob(path_ProcessedData + '*.png')[0:batch_size*2]
 
 loaded_images = [cv2.imread(image) for image in list_images]
-
 
 # %%
 
@@ -118,9 +124,12 @@ for i, batch in enumerate(im_batches):
 
     if type(prediction) == int:
 
-        for im_num, image in enumerate(list_images[i*batch_size: min((i + 1)*batch_size, len(list_images))]):
+        for im_num, image in enumerate(
+                list_images[i*batch_size: min((i + 1)*batch_size,
+                                              len(list_images))]):
             im_id = i*batch_size + im_num
-            print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
+            print("{0:20s} predicted in {1:6.3f} seconds".
+                  format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", ""))
             print("----------------------------------------------------------")
         continue
@@ -151,13 +160,13 @@ except NameError:
     print("No detections were made")
     exit()
 
-# %%
+# %% Inverse scaling the image size
 
 im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
 
 scaling_factor = torch.min(inp_dim/im_dim_list, 1)[0].view(-1, 1)
 
-
+# scaling the image back to its orginal dimensions for drawing.
 output[:, [1, 3]] -= (inp_dim - scaling_factor*im_dim_list[:, 0].view(-1, 1))/2
 output[:, [2, 4]] -= (inp_dim - scaling_factor*im_dim_list[:, 1].view(-1, 1))/2
 output[:, 1:5] /= scaling_factor
@@ -168,15 +177,20 @@ output_recast = time.time()
 class_load = time.time()
 draw = time.time()
 
+# %%
 
 def write(x, results):
     c1 = tuple(x[1:3].int())
     c2 = tuple(x[3:5].int())
     img = results[int(x[0])]
     cls = int(x[-1])
+    # FIXME: change this to be non-random
     color = random.choice(colors)
     label = "{0}".format(classes[cls])
+    # draw the rectangle around the image
     cv2.rectangle(img, c1, c2, color, 1)
+
+    # draw a rectangle to put the label in
     t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
     c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
     cv2.rectangle(img, c1, c2, color, -1)

@@ -7,7 +7,7 @@ from utilis import parse_cfg, create_module, get_test_input
 from torch.autograd import Variable
 import numpy as np
 
-
+# We are inhereting the properties from torch.nn.Module
 class yolo_v3(nn.Module):
     def __init__(self, blocks):
         super().__init__()
@@ -43,7 +43,7 @@ class yolo_v3(nn.Module):
 # =============================================================================
         grid = np.arange(yolo_size)
         a,b = np.meshgrid(grid, grid)
-    
+
         x_offset = torch.FloatTensor(a).view(-1,1)
         y_offset = torch.FloatTensor(b).view(-1,1)
 
@@ -54,7 +54,7 @@ class yolo_v3(nn.Module):
         x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,self.num_anchors).view(-1,2).unsqueeze(0)
 
         x[:,:,:2] += x_y_offset
-    
+
         # treansform the width and height with anchors (bw = pw * e^tw)
         anchors = [anchor/stride for anchor in anchors]
         anchors = torch.FloatTensor(anchors)   # in order to use repeat
@@ -69,7 +69,7 @@ class yolo_v3(nn.Module):
         # standadize to the imput size
         x[:, :, :4] *= stride
         return x
-   
+
 
     def forward(self, x, cuda):
         cache = {}
@@ -126,72 +126,72 @@ class yolo_v3(nn.Module):
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"]
-    
+
             #If module_type is convolutional load weights
             #Otherwise ignore.
-            
+
             if module_type == "convolutional":
                 model = self.module_list[i]
                 try:
                     batch_normalize = int(self.blocks[i+1]["batch_normalize"])
                 except:
                     batch_normalize = 0
-            
+
                 conv = model[0]
-                
-                
+
+
                 if (batch_normalize):
                     bn = model[1]
-        
+
                     #Get the number of weights of Batch Norm Layer
                     num_bn_biases = bn.bias.numel()
-        
+
                     #Load the weights
                     bn_biases = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
                     ptr += num_bn_biases
-        
+
                     bn_weights = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
                     ptr  += num_bn_biases
-        
+
                     bn_running_mean = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
                     ptr  += num_bn_biases
-        
+
                     bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
                     ptr  += num_bn_biases
-        
-                    #Cast the loaded weights into dims of model weights. 
+
+                    #Cast the loaded weights into dims of model weights.
                     bn_biases = bn_biases.view_as(bn.bias.data)
                     bn_weights = bn_weights.view_as(bn.weight.data)
                     bn_running_mean = bn_running_mean.view_as(bn.running_mean)
                     bn_running_var = bn_running_var.view_as(bn.running_var)
-        
+
                     #Copy the data to model
                     bn.bias.data.copy_(bn_biases)
                     bn.weight.data.copy_(bn_weights)
                     bn.running_mean.copy_(bn_running_mean)
                     bn.running_var.copy_(bn_running_var)
-                
+
                 else:
                     #Number of biases
                     num_biases = conv.bias.numel()
-                
+
                     #Load the weights
                     conv_biases = torch.from_numpy(weights[ptr: ptr + num_biases])
                     ptr = ptr + num_biases
-                
+
                     #reshape the loaded weights according to the dims of the model weights
                     conv_biases = conv_biases.view_as(conv.bias.data)
-                
+
                     #Finally copy the data
                     conv.bias.data.copy_(conv_biases)
-                    
+
                 #Let us load the weights for the Convolutional layers
                 num_weights = conv.weight.numel()
-                
+
                 #Do the same as above for weights
                 conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
                 ptr = ptr + num_weights
-                
+
                 conv_weights = conv_weights.view_as(conv.weight.data)
                 conv.weight.data.copy_(conv_weights)
 
@@ -204,4 +204,4 @@ blocks = parse_cfg(cfg_path)
 
 
 
-    
+

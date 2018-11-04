@@ -276,13 +276,13 @@ def box_iou(box1, box2):
 #        return output
 #    except NameError:
 #        return 0
-#    
+#
 
 
 def filter_results(prediction, confidence, num_classes, nms_conf = 0.4):
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
-    
+
     # create a new tensor that has the identical dtype as prediction tensor
     box_corners = prediction.new(prediction.shape)
 
@@ -294,76 +294,77 @@ def filter_results(prediction, confidence, num_classes, nms_conf = 0.4):
 
     # copy the transfored numbers to prediction
     prediction[:,:,:4] = box_corners[:,:,:4]
-    
+
     batch_size = prediction.size(0)
 
     write = False
-    
+
 
 
     for ind in range(batch_size):
         # image Tensor
-        image_pred = prediction[ind]     
-        
+        image_pred = prediction[ind]
+
         # ge
         max_conf, class_index = torch.max(image_pred[:,5:5+ num_classes], 1)
         max_conf = max_conf.float().unsqueeze(1)
         class_index = class_index.float().unsqueeze(1)
-        
+
         # concat xmin,ymin,xmax,ymax,bc together with class prob and class index
         seq = (image_pred[:,:5], max_conf, class_index)
         image_pred = torch.cat(seq, 1)
-        
+
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
         try:
             image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
         except:
             continue
-        
+
         if image_pred_.shape[0] == 0:
-            continue       
-#        
-  
+            continue
+#
+
 #        # find the unique index in the picture thus find the classes
         img_classes = torch.unique(image_pred_[:, 6])
-        
-        
+
+
         for cls in img_classes:
             #perform NMS
 
-        
+
             #get the detections with one particular class
             cls_mask = image_pred_*(image_pred_[:,-1] == cls).float().unsqueeze(1)
             class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
             image_pred_class = image_pred_[class_mask_ind].view(-1,7)
-            
+
             #sort the detections such that the entry with the maximum objectness
             #confidence is at the top
             conf_sort_index = torch.sort(image_pred_class[:,4], descending = True )[1]
             image_pred_class = image_pred_class[conf_sort_index]
             idx = image_pred_class.size(0)   #Number of detections
-            
+
             for i in range(idx):
                 # Get the IOUs of all boxes that come after the one we are
                 # looking at in the loop
                 try:
                     ious = box_iou(image_pred_class[i, :4].view(1, -1),
                                    image_pred_class[i+1:, :4])
-                    
+
                 except (IndexError, ValueError):
                     break
-            
+
+## FIXME: I belive this comment has the equality backwards.
                 #Zero out all the detections that have IoU > treshhold
                 iou_mask = (ious < nms_conf).float().unsqueeze(1)
-                image_pred_class[i+1:] *= iou_mask       
-            
+                image_pred_class[i+1:] *= iou_mask
+
                 #Remove the non-zero entries
                 non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
                 image_pred_class = image_pred_class[non_zero_ind].view(-1,7)
             # Repeat the batch_id for the same class in the image
             batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
             seq = batch_ind, image_pred_class
-            
+
             if not write:
                 output = torch.cat(seq,1)
                 write = True
@@ -384,18 +385,18 @@ def letterbox_image(img, inp_dim):
     new_w = int(img_w * min(w/img_w, h/img_h))
     new_h = int(img_h * min(w/img_w, h/img_h))
     resized_image = cv2.resize(img, (new_w,new_h), interpolation = cv2.INTER_CUBIC)
-    
+
     canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
 
     canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
-    
+
     return canvas
 
 def prep_image(img, inp_dim):
     """
-    Prepare image for inputting to the neural network. 
-    
-    Returns a Variable 
+    Prepare image for inputting to the neural network.
+
+    Returns a Variable
     """
     img = (letterbox_image(img, (inp_dim, inp_dim)))
     img = img[:,:,::-1].transpose((2,0,1)).copy()
@@ -406,7 +407,7 @@ def prep_image(img, inp_dim):
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
     img = cv2.resize(img, (608,608))          # Resize to the input dimension
-    img_ =  img[:,:,::-1].transpose((2,0,1))  # BGR -> RGB | H X W C -> C X H X W 
+    img_ =  img[:,:,::-1].transpose((2,0,1))  # BGR -> RGB | H X W C -> C X H X W
     img_ = img_[np.newaxis,:,:,:]/255.0       # Add a channel at 0 (for batch) | Normalise
     img_ = torch.from_numpy(img_).float()     # Convert to float                   # Convert to Variable
     return img_
