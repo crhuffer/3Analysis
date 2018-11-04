@@ -32,6 +32,9 @@ from utilis import create_module, letterbox_image, prep_image, filter_results
 
 path_RawData = "../1RawData/"
 path_ProcessedData = "../2ProcessedData/"
+path_Predictions = "../5Predictions/"
+
+filename_Predictions = path_Predictions + 'Predictions.csv'
 
 # %%
 
@@ -176,6 +179,18 @@ for i in range(output.shape[0]):
 output_recast = time.time()
 class_load = time.time()
 draw = time.time()
+
+# %% Convert the predictions into a dataframe for storage.
+
+columns = ['x_center', 'y_center', 'width', 'height', 'confidence', 'other1', 'class']
+
+df_Predictions = pd.DataFrame(np.array(output[:, 1:8]), columns=columns)
+df_Predictions['filename'] = list_images
+
+columns = ['filename'] + columns
+df_Predictions = pd.DataFrame(df_Predictions, columns=columns)
+
+df_Predictions.to_csv(filename_Predictions)
 
 # %%
 
