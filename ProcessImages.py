@@ -77,120 +77,134 @@ assert inp_dim > 32
 # put to evaluation mode so that gradient wont be calculated
 model.eval()
 
+
 # %% Load in the images to be processed
 load_batch = time.time()
 
-#list_images = glob.glob(path_ProcessedData + '*.png')
+list_images = glob.glob(path_ProcessedData + '*.png')
 # Load only the first few images to test the code.
-list_images = glob.glob(path_ProcessedData + '*.png')[0:batch_size*2]
+#list_images = glob.glob(path_ProcessedData + '*.png')[0:batch_size*2]
 
-loaded_images = [cv2.imread(image) for image in list_images]
-
-# %%
-
-im_batches = list(map(prep_image,
-                      loaded_images,
-                      [inp_dim] * len(list_images)))
-
-im_dim_list = [(image.shape[1], image.shape[0]) for image in loaded_images]
-im_dim_list = torch.FloatTensor(im_dim_list).repeat(1, 2)
-if cuda:
-    im_dim_list = im_dim_list.cuda()
-
-leftover = 0
-if (len(im_dim_list) % batch_size):
-    leftover = 1
-
-if batch_size != 1:
-    num_batches = len(list_images) // batch_size + leftover
-    im_batches = [torch.cat((im_batches[batch_index*batch_size: min((batch_index + 1)*batch_size,
-                  len(im_batches))])) for batch_index in range(num_batches)]
+df_Predictions = pd.DataFrame()
 
 
-write = 0
-start_det_loop = time.time()
+for indexes in range(0, len(list_images), batch_size):
+    list_images_current = list_images[indexes:indexes+batch_size]
+    loaded_images = [cv2.imread(image) for image in list_images_current]
 
-# %%
+#     %%
 
-for i, batch in enumerate(im_batches):
-    # load the image
-    start = time.time()
+    im_batches = list(map(prep_image,
+                          loaded_images,
+                          [inp_dim] * len(list_images_current)))
+
+    im_dim_list = [(image.shape[1], image.shape[0]) for image in loaded_images]
+    im_dim_list = torch.FloatTensor(im_dim_list).repeat(1, 2)
     if cuda:
-        batch = batch.cuda()
+        im_dim_list = im_dim_list.cuda()
 
-    prediction = model(batch, cuda)
+    leftover = 0
+    if (len(im_dim_list) % batch_size):
+        leftover = 1
 
-#    prediction = filter_results(prediction, confidence, nms_thesh)
-    prediction = filter_results(prediction, confidence, num_classes, nms_thesh)
+    if batch_size != 1:
+        num_batches = len(list_images_current) // batch_size + leftover
+        im_batches = [torch.cat((im_batches[batch_index*batch_size: min((batch_index + 1)*batch_size,
+                      len(im_batches))])) for batch_index in range(num_batches)]
 
-    end = time.time()
 
-    if type(prediction) == int:
+    write = 0
+    start_det_loop = time.time()
 
-        for im_num, image in enumerate(
-                list_images[i*batch_size: min((i + 1)*batch_size,
-                                              len(list_images))]):
+#    %%
+
+    for i, batch in enumerate(im_batches):
+        # load the image
+        start = time.time()
+        if cuda:
+            batch = batch.cuda()
+
+        prediction = model(batch, cuda)
+
+    #    prediction = filter_results(prediction, confidence, nms_thesh)
+        prediction = filter_results(prediction, confidence, num_classes, nms_thesh)
+
+        end = time.time()
+
+        if type(prediction) == int:
+
+            for im_num, image in enumerate(
+                    list_images_current[i*batch_size: min((i + 1)*batch_size,
+                                                  len(list_images_current))]):
+                im_id = i*batch_size + im_num
+                print("{0:20s} predicted in {1:6.3f} seconds".
+                      format(image.split("/")[-1], (end - start)/batch_size))
+                print("{0:20s} {1:s}".format("Objects Detected:", ""))
+                print("----------------------------------------------------------")
+            continue
+
+        prediction[:, 0] += i*batch_size  # transform the attribute from index in batch to index in list_images_current
+
+        if not write:  # If we have't initialised output
+            output = prediction
+            write = 1
+        else:
+            output = torch.cat((output, prediction))
+
+        for im_num, image in enumerate(list_images_current[i*batch_size: min((i +  1)*batch_size, len(list_images_current))]):
             im_id = i*batch_size + im_num
-            print("{0:20s} predicted in {1:6.3f} seconds".
-                  format(image.split("/")[-1], (end - start)/batch_size))
-            print("{0:20s} {1:s}".format("Objects Detected:", ""))
+            objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
+            print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
+            print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
             print("----------------------------------------------------------")
-        continue
 
-    prediction[:, 0] += i*batch_size  # transform the attribute from index in batch to index in list_images
+        if cuda:
+            torch.cuda.synchronize()
 
-    if not write:  # If we have't initialised output
-        output = prediction
-        write = 1
+#     %%
+
+    try:
+        output
+    except NameError:
+        print("No detections were made")
+        exit()
+
+#     %% Inverse scaling the image size
+
+    im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
+
+    scaling_factor = torch.min(inp_dim/im_dim_list, 1)[0].view(-1, 1)
+
+    # scaling the image back to its orginal dimensions for drawing.
+    output[:, [1, 3]] -= (inp_dim - scaling_factor*im_dim_list[:, 0].view(-1, 1))/2
+    output[:, [2, 4]] -= (inp_dim - scaling_factor*im_dim_list[:, 1].view(-1, 1))/2
+    output[:, 1:5] /= scaling_factor
+    for i in range(output.shape[0]):
+        output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim_list[i, 0])
+        output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim_list[i, 1])
+    output_recast = time.time()
+    class_load = time.time()
+    draw = time.time()
+
+#     %% Convert the predictions into a dataframe for storage.
+
+    columns = ['x_center', 'y_center', 'width', 'height', 'confidence', 'other1', 'class']
+
+    df_Predictions_current = pd.DataFrame(np.array(output[:, 1:8]), columns=columns)
+    df_Predictions_current['filename'] = np.array(output[:, 0])
+    df_Predictions_current['filename'] = df_Predictions_current['filename'].apply(lambda x: list_images_current[int(x)])
+
+    columns = ['filename'] + columns
+    df_Predictions_current = pd.DataFrame(df_Predictions_current, columns=columns)
+
+    # either create predictions or overwrite it depending on which time
+    # through the loop.
+    if len(df_Predictions) == 0:
+        df_Predictions = df_Predictions_current.copy()
     else:
-        output = torch.cat((output, prediction))
+        df_Predictions = pd.concat([df_Predictions, df_Predictions_current], ignore_index=True)
 
-    for im_num, image in enumerate(list_images[i*batch_size: min((i +  1)*batch_size, len(list_images))]):
-        im_id = i*batch_size + im_num
-        objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
-        print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
-        print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
-        print("----------------------------------------------------------")
-
-    if cuda:
-        torch.cuda.synchronize()
-
-# %%
-
-try:
-    output
-except NameError:
-    print("No detections were made")
-    exit()
-
-# %% Inverse scaling the image size
-
-im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
-
-scaling_factor = torch.min(inp_dim/im_dim_list, 1)[0].view(-1, 1)
-
-# scaling the image back to its orginal dimensions for drawing.
-output[:, [1, 3]] -= (inp_dim - scaling_factor*im_dim_list[:, 0].view(-1, 1))/2
-output[:, [2, 4]] -= (inp_dim - scaling_factor*im_dim_list[:, 1].view(-1, 1))/2
-output[:, 1:5] /= scaling_factor
-for i in range(output.shape[0]):
-    output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim_list[i, 0])
-    output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim_list[i, 1])
-output_recast = time.time()
-class_load = time.time()
-draw = time.time()
-
-# %% Convert the predictions into a dataframe for storage.
-
-columns = ['x_center', 'y_center', 'width', 'height', 'confidence', 'other1', 'class']
-
-df_Predictions = pd.DataFrame(np.array(output[:, 1:8]), columns=columns)
-df_Predictions['filename'] = list_images
-
-columns = ['filename'] + columns
-df_Predictions = pd.DataFrame(df_Predictions, columns=columns)
-
-df_Predictions.to_csv(filename_Predictions)
+    df_Predictions.to_csv(filename_Predictions)
 
 # %%
 
@@ -216,7 +230,7 @@ def write(x, results):
 
 outputs = list(map(lambda x: write(x, loaded_images), output))
 #cv2.imshow('demo', outputs[0]); key = cv2.waitKey(1)
-det_names = pd.Series(list_images).apply(lambda x: "{}/det_{}".format(path_ProcessedData, x.split("/")[-1]))
+det_names = pd.Series(list_images_current).apply(lambda x: "{}/det_{}".format(path_ProcessedData, x.split("/")[-1]))
 list(map(cv2.imwrite, det_names, loaded_images))
 end = time.time()
 print("SUMMARY")
@@ -225,10 +239,10 @@ print("{:25s}: {}".format("Task", "Time Taken (in seconds)"))
 print()
 #print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
 print("{:25s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
-print("{:25s}: {:2.3f}".format("Detection (" + str(len(list_images)) +  " images)", output_recast - start_det_loop))
+print("{:25s}: {:2.3f}".format("Detection (" + str(len(list_images_current)) +  " images)", output_recast - start_det_loop))
 print("{:25s}: {:2.3f}".format("Output Processing", class_load - output_recast))
 print("{:25s}: {:2.3f}".format("Drawing Boxes", end - draw))
-print("{:25s}: {:2.3f}".format("Average time_per_img", (end - load_batch)/len(list_images)))
+print("{:25s}: {:2.3f}".format("Average time_per_img", (end - load_batch)/len(list_images_current)))
 print("----------------------------------------------------------")
 
 if cuda:
