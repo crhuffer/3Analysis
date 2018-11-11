@@ -13,6 +13,7 @@ import numpy as np
 
 images = "../1RawData/"
 path_ProcessedData = "../2ProcessedData/"
+path_NewImages = path_ProcessedData + 'NewImages/'
 
 # %% Setup input device
 
@@ -32,14 +33,14 @@ while cap1.isOpened():
 
     if ret:
 
-        filename1 = (path_ProcessedData +
+        filename1 = (path_NewImages +
                     'D{}Date{}.png'.format(DeviceID1,
                       datetime.datetime.now().strftime('%Y%m%d%H%M%S%f'))
                     )
         print(filename1)
         cv2.imwrite(filename1, frame1)
 
-        filename2 = (path_ProcessedData +
+        filename2 = (path_NewImages +
                     'D{}Date{}.png'.format(DeviceID2,
                       datetime.datetime.now().strftime('%Y%m%d%H%M%S%f'))
                     )
