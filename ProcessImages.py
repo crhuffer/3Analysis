@@ -29,6 +29,7 @@ from utilis import load_classes, parse_cfg, get_test_input
 from utilis import create_module, letterbox_image, prep_image, filter_results
 import re
 import os
+# import shutil
 
 # %% Current local version
 
@@ -90,7 +91,7 @@ model.eval()
 
 # %% Get list tags that are human tagged but need to be tagged with yolo
 
-boolean_ProcessHumanTagged = True
+boolean_ProcessHumanTagged = False
 
 if boolean_ProcessHumanTagged:
     list_humantags = glob.glob(path_HumanTaggedImages + '*.txt')
@@ -114,6 +115,7 @@ if boolean_ProcessHumanTagged:
 
 else:
     list_images = glob.glob(path_ImagesToProcess + '*.png')
+#    list_images = glob.glob(path_ImagesToProcess + '*.PNG')
 
 # %% Load in the images to be processed
 load_batch = time.time()
@@ -254,7 +256,9 @@ for indexes in range(0, len(list_images), batch_size):
 
         # Now move the file to a processed folder
 #        try:
+#        shutil.move(imagefilename, path_ProcessedImages+imagename)
         os.rename(imagefilename, path_ProcessedImages+imagename)
+#        os.system('mv {} {}'.format(imagefilename, path_ProcessedImages+imagename))
 #        except :
 
 ##     %% Convert the predictions into a dataframe for storage.
