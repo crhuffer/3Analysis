@@ -28,6 +28,7 @@ import numpy as np
 from utilis import load_classes, parse_cfg, get_test_input
 from utilis import create_module, letterbox_image, prep_image, filter_results
 import re
+import os
 
 # %% Current local version
 
@@ -37,6 +38,9 @@ version = 'V1'
 
 path_RawData = "../1RawData/"
 path_ProcessedData = "../2ProcessedData/"
+path_NewImages= path_ProcessedData + 'NewImages/'
+path_ImagesToProcess= path_ProcessedData + 'ImagesToProcess/'
+path_ProcessedImages= path_ProcessedData + 'ProcessedImages/'
 path_HumanTaggedImages = path_ProcessedData + 'HumanTagged/'
 path_YOLOTaggedImagesCurrentVersion = path_ProcessedData + 'YOLOTagged' + version + '/'
 path_Predictions = "../5Predictions/"
@@ -86,28 +90,36 @@ model.eval()
 
 # %% Get list tags that are human tagged but need to be tagged with yolo
 
-list_humantags = glob.glob(path_HumanTaggedImages + '*.txt')
-list_yolotags = glob.glob(path_YOLOTaggedImagesCurrentVersion + '*.txt')
+boolean_ProcessHumanTagged = True
 
-list_humanimages = glob.glob(path_HumanTaggedImages + '*.png')
+if boolean_ProcessHumanTagged:
+    list_humantags = glob.glob(path_HumanTaggedImages + '*.txt')
+    list_yolotags = glob.glob(path_YOLOTaggedImagesCurrentVersion + '*.txt')
 
-# find human tags that have not been run through yolo
-try:
-    list_alltags = list(set(list_humantags.extend(list_yolotags)))
-except TypeError:  # will arise if no tags in list_yolotags or list_humantags
-    list_alltags = list_humantags  # assuming it was list_yolotags that was empty
+    list_humanimages = glob.glob(path_HumanTaggedImages + '*.png')
 
-# get the tags from all tags that are not in yolo tags
-list_missingtags = list(set(list_alltags) - set(list_yolotags))
+    # find human tags that have not been run through yolo
+    try:
+        list_alltags = list(set(list_humantags.extend(list_yolotags)))
+    except TypeError:  # will arise if no tags in list_yolotags or list_humantags
+        list_alltags = list_humantags  # assuming it was list_yolotags that was empty
 
-# change the tag extension from txt to png to grab the images
-list_missingtagsimages = [filename[:-4]+'.png' for filename in list_missingtags]
+    # get the tags from all tags that are not in yolo tags
+    list_missingtags = list(set(list_alltags) - set(list_yolotags))
+
+    # change the tag extension from txt to png to grab the images
+    list_missingtagsimages = [filename[:-4]+'.png' for filename in list_missingtags]
+
+    list_images = list_missingtagsimages
+
+else:
+    list_images = glob.glob(path_ImagesToProcess + '*.png')
 
 # %% Load in the images to be processed
 load_batch = time.time()
 
 #list_images = glob.glob(path_ProcessedData + '*.png')
-list_images = list_missingtagsimages
+#list_images = list_missingtagsimages
 
 # Load only the first few images to test the code.
 #list_images = glob.glob(path_ProcessedData + '*.png')[0:batch_size*2]
@@ -230,7 +242,8 @@ for indexes in range(0, len(list_images), batch_size):
         # ignore the start of the path, grab the characters before .png
         pattern = '(.*?)([a-zA-Z0-9]+.png$)'
         # group 0 is everything, group 1 is the path, group 2 the filename
-        tagfilename = path_YOLOTaggedImagesCurrentVersion + re.match(pattern, imagefilename).group(2)[:-4] + '.txt'
+        imagename = re.match(pattern, imagefilename).group(2)
+        tagfilename = path_YOLOTaggedImagesCurrentVersion + imagename[:-4] + '.txt'
 
         columns = ['x_center', 'y_center', 'width', 'height',
                    'confidence', 'other1', 'class']
@@ -238,6 +251,11 @@ for indexes in range(0, len(list_images), batch_size):
         indexer = df_output['image_index'] == image_index
         df_tag = df_output.loc[indexer, columns]
         df_tag.to_csv(tagfilename)
+
+        # Now move the file to a processed folder
+#        try:
+        os.rename(imagefilename, path_ProcessedImages+imagename)
+#        except :
 
 ##     %% Convert the predictions into a dataframe for storage.
 #
