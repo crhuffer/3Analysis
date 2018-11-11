@@ -255,11 +255,12 @@ for indexes in range(0, len(list_images), batch_size):
         df_tag.to_csv(tagfilename)
 
         # Now move the file to a processed folder
-#        try:
+        try:
 #        shutil.move(imagefilename, path_ProcessedImages+imagename)
-        os.rename(imagefilename, path_ProcessedImages+imagename)
+            os.rename(imagefilename, path_ProcessedImages+imagename)
 #        os.system('mv {} {}'.format(imagefilename, path_ProcessedImages+imagename))
-#        except :
+        except FileExistsError:
+            os.remove(imagefilename)
 
 ##     %% Convert the predictions into a dataframe for storage.
 #
