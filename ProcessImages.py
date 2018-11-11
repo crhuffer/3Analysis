@@ -27,11 +27,18 @@ import numpy as np
 #    from torch.utils.data import DataLoader
 from utilis import load_classes, parse_cfg, get_test_input
 from utilis import create_module, letterbox_image, prep_image, filter_results
+import re
+
+# %% Current local version
+
+version = 'V1'
 
 # %% Setup paths
 
 path_RawData = "../1RawData/"
 path_ProcessedData = "../2ProcessedData/"
+path_HumanTaggedImages = path_ProcessedData + 'HumanTagged/'
+path_YOLOTaggedImagesCurrentVersion = path_ProcessedData + 'YOLOTagged' + version + '/'
 path_Predictions = "../5Predictions/"
 
 filename_Predictions = path_Predictions + 'Predictions.csv'
@@ -77,11 +84,31 @@ assert inp_dim > 32
 # put to evaluation mode so that gradient wont be calculated
 model.eval()
 
+# %% Get list tags that are human tagged but need to be tagged with yolo
+
+list_humantags = glob.glob(path_HumanTaggedImages + '*.txt')
+list_yolotags = glob.glob(path_YOLOTaggedImagesCurrentVersion + '*.txt')
+
+list_humanimages = glob.glob(path_HumanTaggedImages + '*.png')
+
+# find human tags that have not been run through yolo
+try:
+    list_alltags = list(set(list_humantags.extend(list_yolotags)))
+except TypeError:  # will arise if no tags in list_yolotags or list_humantags
+    list_alltags = list_humantags  # assuming it was list_yolotags that was empty
+
+# get the tags from all tags that are not in yolo tags
+list_missingtags = list(set(list_alltags) - set(list_yolotags))
+
+# change the tag extension from txt to png to grab the images
+list_missingtagsimages = [filename[:-4]+'.png' for filename in list_missingtags]
 
 # %% Load in the images to be processed
 load_batch = time.time()
 
-list_images = glob.glob(path_ProcessedData + '*.png')
+#list_images = glob.glob(path_ProcessedData + '*.png')
+list_images = list_missingtagsimages
+
 # Load only the first few images to test the code.
 #list_images = glob.glob(path_ProcessedData + '*.png')[0:batch_size*2]
 
@@ -118,7 +145,10 @@ for indexes in range(0, len(list_images), batch_size):
 
 #    %%
 
-    for i, batch in enumerate(im_batches):
+    for image_index, batch in enumerate(im_batches):
+#        imagefilename = list_images_current[image_index]
+#        list_image_index_current
+
         # load the image
         start = time.time()
         if cuda:
@@ -134,16 +164,16 @@ for indexes in range(0, len(list_images), batch_size):
         if type(prediction) == int:
 
             for im_num, image in enumerate(
-                    list_images_current[i*batch_size: min((i + 1)*batch_size,
+                    list_images_current[image_index*batch_size: min((image_index + 1)*batch_size,
                                                   len(list_images_current))]):
-                im_id = i*batch_size + im_num
+                im_id = image_index*batch_size + im_num
                 print("{0:20s} predicted in {1:6.3f} seconds".
                       format(image.split("/")[-1], (end - start)/batch_size))
                 print("{0:20s} {1:s}".format("Objects Detected:", ""))
                 print("----------------------------------------------------------")
             continue
 
-        prediction[:, 0] += i*batch_size  # transform the attribute from index in batch to index in list_images_current
+        prediction[:, 0] += image_index*batch_size  # transform the attribute from index in batch to index in list_images_current
 
         if not write:  # If we have't initialised output
             output = prediction
@@ -151,8 +181,8 @@ for indexes in range(0, len(list_images), batch_size):
         else:
             output = torch.cat((output, prediction))
 
-        for im_num, image in enumerate(list_images_current[i*batch_size: min((i +  1)*batch_size, len(list_images_current))]):
-            im_id = i*batch_size + im_num
+        for im_num, image in enumerate(list_images_current[image_index*batch_size: min((image_index +  1)*batch_size, len(list_images_current))]):
+            im_id = image_index*batch_size + im_num
             objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
@@ -179,32 +209,55 @@ for indexes in range(0, len(list_images), batch_size):
     output[:, [1, 3]] -= (inp_dim - scaling_factor*im_dim_list[:, 0].view(-1, 1))/2
     output[:, [2, 4]] -= (inp_dim - scaling_factor*im_dim_list[:, 1].view(-1, 1))/2
     output[:, 1:5] /= scaling_factor
-    for i in range(output.shape[0]):
-        output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim_list[i, 0])
-        output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim_list[i, 1])
+    for image_index in range(output.shape[0]):
+        output[image_index, [1, 3]] = torch.clamp(output[image_index, [1, 3]], 0.0, im_dim_list[image_index, 0])
+        output[image_index, [2, 4]] = torch.clamp(output[image_index, [2, 4]], 0.0, im_dim_list[image_index, 1])
     output_recast = time.time()
     class_load = time.time()
     draw = time.time()
 
-#     %% Convert the predictions into a dataframe for storage.
+    # Grab the predictions in output
+    # There can be multiple predictions per image, so we will grab everything
+    # from the batch and then determine which things correspond to eaach image
+    columns = ['image_index', 'x_center', 'y_center', 'width', 'height',
+                   'confidence', 'other1', 'class']
+    indexer = np.arange(len(output))
+    df_output = pd.DataFrame(np.array(output), index=indexer, columns=columns)
+    for image_index, imagefilename in enumerate(list_images_current):
 
-    columns = ['x_center', 'y_center', 'width', 'height', 'confidence', 'other1', 'class']
+        #imagefilename is in the image path, want to change it to yolo path
 
-    df_Predictions_current = pd.DataFrame(np.array(output[:, 1:8]), columns=columns)
-    df_Predictions_current['filename'] = np.array(output[:, 0])
-    df_Predictions_current['filename'] = df_Predictions_current['filename'].apply(lambda x: list_images_current[int(x)])
+        # ignore the start of the path, grab the characters before .png
+        pattern = '(.*?)([a-zA-Z0-9]+.png$)'
+        # group 0 is everything, group 1 is the path, group 2 the filename
+        tagfilename = path_YOLOTaggedImagesCurrentVersion + re.match(pattern, imagefilename).group(2)[:-4] + '.txt'
 
-    columns = ['filename'] + columns
-    df_Predictions_current = pd.DataFrame(df_Predictions_current, columns=columns)
+        columns = ['x_center', 'y_center', 'width', 'height',
+                   'confidence', 'other1', 'class']
+        # Grab just the predictions for the current image
+        indexer = df_output['image_index'] == image_index
+        df_tag = df_output.loc[indexer, columns]
+        df_tag.to_csv(tagfilename)
 
-    # either create predictions or overwrite it depending on which time
-    # through the loop.
-    if len(df_Predictions) == 0:
-        df_Predictions = df_Predictions_current.copy()
-    else:
-        df_Predictions = pd.concat([df_Predictions, df_Predictions_current], ignore_index=True)
-
-    df_Predictions.to_csv(filename_Predictions)
+##     %% Convert the predictions into a dataframe for storage.
+#
+#    columns = ['x_center', 'y_center', 'width', 'height', 'confidence', 'other1', 'class']
+#
+#    df_Predictions_current = pd.DataFrame(np.array(output[:, 1:8]), columns=columns)
+#    df_Predictions_current['filename'] = np.array(output[:, 0])
+#    df_Predictions_current['filename'] = df_Predictions_current['filename'].apply(lambda x: list_images_current[int(x)])
+#
+#    columns = ['filename'] + columns
+#    df_Predictions_current = pd.DataFrame(df_Predictions_current, columns=columns)
+#
+#    # either create predictions or overwrite it depending on which time
+#    # through the loop.
+#    if len(df_Predictions) == 0:
+#        df_Predictions = df_Predictions_current.copy()
+#    else:
+#        df_Predictions = pd.concat([df_Predictions, df_Predictions_current], ignore_index=True)
+#
+#    df_Predictions.to_csv(filename_Predictions)
 
 # %%
 
