@@ -9,6 +9,9 @@ import time
 import cv2
 import datetime
 import numpy as np
+
+# turns off
+BooleanWillImagesSave = True
 # %% Setup paths
 
 images = "../1RawData/"
@@ -58,17 +61,18 @@ while cap1.isOpened():
     ret2, frame2 = cap2.read()
 
     if ret1:
-
+        now = datetime.datetime.now()
+        formatstr = '%Y%m%d%H%M%S%f'
         filename1 = (path_NewImages +
                     'D{}Date{}.png'.format(DeviceID1,
-                      datetime.datetime.now().strftime('%Y%m%d%H%M%S%f'))
+                      now.strftime(formatstr))
                     )
         print(filename1)
 #        cv2.imwrite(filename1, frame1)
 
         filename2 = (path_NewImages +
                     'D{}Date{}.png'.format(DeviceID2,
-                      datetime.datetime.now().strftime('%Y%m%d%H%M%S%f'))
+                      now.strftime(formatstr))
                     )
         print(filename2)
 #        cv2.imwrite(filename2, frame2)
@@ -77,10 +81,12 @@ while cap1.isOpened():
 #        cv2.imshow("frame", np.concatenate((frame1, cv2.getRotationMatrix2D(frame2, 90, 1)), axis=1))
         angle=90
         frame1_rotated = rotate_bound(frame1, angle)
-        cv2.imwrite(filename1, frame1_rotated)
+
         angle=90
         frame2_rotated = rotate_bound(frame2, angle)
-        cv2.imwrite(filename2, frame2_rotated)
+        if BooleanWillImagesSave:
+            cv2.imwrite(filename1, frame1_rotated)
+            cv2.imwrite(filename2, frame2_rotated)
 
 #        cv2.imshow("frame", np.concatenate((cv2.getRotationMatrix2D(frame1, 90, 1), cv2.getRotationMatrix2D(frame2, 90, 1)), axis=1))
         cv2.imshow("frame", np.concatenate((frame1_rotated, frame2_rotated), axis=1))
