@@ -35,7 +35,7 @@ list_nontagged = list(set(list_humanimages_base)-set(list_humantags_base))
 
 # %%
 
-list_toprocess = pd.Series(random.sample(list_nontagged, imagestoprocess)).apply(lambda x: x+'.png')
+list_toprocess = pd.Series(random.sample(list_nontagged, imagestoprocess)).apply(lambda x: path_ProcessedImages + x+'.png')
 
 # %%
 
