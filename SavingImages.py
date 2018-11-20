@@ -82,13 +82,15 @@ while cap1.isOpened():
         angle=90
         frame1_rotated = rotate_bound(frame1, angle)
 
-        angle=90
+        angle=0
         frame2_rotated = rotate_bound(frame2, angle)
         if BooleanWillImagesSave:
             cv2.imwrite(filename1, frame1_rotated)
             cv2.imwrite(filename2, frame2_rotated)
 
+#        print(frame1_rotated.shape, frame2_rotated.shape)
 #        cv2.imshow("frame", np.concatenate((cv2.getRotationMatrix2D(frame1, 90, 1), cv2.getRotationMatrix2D(frame2, 90, 1)), axis=1))
-        cv2.imshow("frame", np.concatenate((frame1_rotated, frame2_rotated), axis=1))
+#        cv2.imshow("frame", np.concatenate((frame1_rotated, frame2_rotated), axis=1))
+        cv2.imshow("frame", np.concatenate((frame1_rotated, np.pad(frame2_rotated, pad_width=((0, 160), (0, 0), (0, 0)), mode='minimum')), axis=1))
 #        cv2.imshow('frame', frame1)
         key = cv2.waitKey(1)
