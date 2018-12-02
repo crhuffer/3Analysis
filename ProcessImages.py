@@ -37,7 +37,8 @@ import MoveImagesForProcessing
 
 # %% Current local version
 
-version = 'V1'
+#version = 'V1'
+version = 'V2'
 
 # %% Setup paths
 
@@ -51,7 +52,7 @@ path_YOLOTaggedImagesCurrentVersion = path_ProcessedData + 'YOLOTagged' + versio
 path_Predictions = "../5Predictions/"
 
 filename_Predictions = path_Predictions + 'Predictions.csv'
-
+filename_ProcessingDurations = path_Predictions + "ProcessingDurations.csv"
 # %%
 
 # layer_type_dic, module_list = create_module(blocks)
@@ -81,8 +82,12 @@ if cuda:
     model = model.cuda()
 for params in model.parameters():
     params.requires_grad = False
-model.layer_type_dic['net_info']["height"] = 416
-model.layer_type_dic['net_info']["width"] = 416
+if version == 'V1':
+    model.layer_type_dic['net_info']["height"] = 416
+    model.layer_type_dic['net_info']["width"] = 416
+elif version == 'V2':
+    model.layer_type_dic['net_info']["height"] = 32*7
+    model.layer_type_dic['net_info']["width"] = 32*7
 inp_dim = int(model.layer_type_dic['net_info']["height"])
 
 # yolo v3 down size the imput images 32 strides, therefore the input needs to
@@ -113,9 +118,9 @@ if boolean_ProcessHumanTagged:
     list_missingtags = list(set(list_alltags) - set(list_yolotags))
 
     # change the tag extension from txt to png to grab the images
-    list_missingtagsimages = [filename[:-4]+'.png' for filename in list_missingtags]
+    list_missingtagsimages = [os.path.basename(filename)[:-4]+'.png' for filename in list_missingtags]
 
-    list_images = list_missingtagsimages
+    list_images = [path_ProcessedImages + filename for filename in list_missingtagsimages]
 
 else:
     list_images = glob.glob(path_ImagesToProcess + '*.png')
@@ -130,6 +135,7 @@ load_batch = time.time()
 # Load only the first few images to test the code.
 #list_images = glob.glob(path_ProcessedData + '*.png')[0:batch_size*2]
 
+list_ProcessingDuration = []
 df_Predictions = pd.DataFrame()
 
 
@@ -189,6 +195,7 @@ for indexes in range(0, len(list_images), batch_size):
                       format(image.split("/")[-1], (end - start)/batch_size))
                 print("{0:20s} {1:s}".format("Objects Detected:", ""))
                 print("----------------------------------------------------------")
+
             continue
 
         prediction[:, 0] += image_index*batch_size  # transform the attribute from index in batch to index in list_images_current
@@ -205,7 +212,7 @@ for indexes in range(0, len(list_images), batch_size):
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
             print("----------------------------------------------------------")
-
+            list_ProcessingDuration.append((end - start)/batch_size)
         if cuda:
             torch.cuda.synchronize()
 
@@ -236,7 +243,7 @@ for indexes in range(0, len(list_images), batch_size):
 
     # Grab the predictions in output
     # There can be multiple predictions per image, so we will grab everything
-    # from the batch and then determine which things correspond to eaach image
+    # from the batch and then determine which things correspond to each image
     columns = ['image_index', 'x_center', 'y_center', 'width', 'height',
                    'confidence', 'other1', 'class']
     indexer = np.arange(len(output))
@@ -285,6 +292,11 @@ for indexes in range(0, len(list_images), batch_size):
 #        df_Predictions = pd.concat([df_Predictions, df_Predictions_current], ignore_index=True)
 #
 #    df_Predictions.to_csv(filename_Predictions)
+
+# %%
+
+df_ProcessingDurations = pd.DataFrame(list_ProcessingDuration, index=list_imagenames)
+df_ProcessingDurations.to_csv(filename_ProcessingDurations)
 
 # %%
 
