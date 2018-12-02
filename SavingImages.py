@@ -11,7 +11,8 @@ import datetime
 import numpy as np
 
 # turns off
-BooleanWillImagesSave = True
+BooleanWillImagesSave = False
+
 # %% Setup paths
 
 images = "../1RawData/"
