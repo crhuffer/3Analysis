@@ -34,6 +34,7 @@ for index, imagename in enumerate(list_ImagesToProcess):
               len(list_ImagesToProcess)))
 
 # %% Delete the files form NewImages if we were successful (made it this far)
+
 for index, imagename in enumerate(list_ImagesToProcess):
     os.remove(imagename)
     if index%100 == 0:

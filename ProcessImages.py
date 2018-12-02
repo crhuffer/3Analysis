@@ -31,6 +31,10 @@ import re
 import os
 # import shutil
 
+# %% Move files to the ImagesToProcessFolder
+
+import MoveImagesForProcessing
+
 # %% Current local version
 
 version = 'V1'
