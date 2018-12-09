@@ -50,9 +50,15 @@ list_humanimages = glob.glob(path_ProcessedImages + '*.png')
 list_humanimages_base = list(pd.Series(list_humanimages).apply(lambda x: os.path.basename(x[:-4])))
 list_nontagged = list(set(list_humanimages_base)-set(list_humantags_base))
 
+# %%
+
+list_nontagged.sort()
+
 # %% Randomly sample some of the nontagged images
 
-list_toprocess = pd.Series(random.sample(list_nontagged, imagestoprocess)).apply(lambda x: path_ProcessedImages + x+'.png')
+#list_toprocess = pd.Series(random.sample(list_nontagged, imagestoprocess)).apply(lambda x: path_ProcessedImages + x+'.png')
+index = random.randint(0,len(list_nontagged))
+list_toprocess = pd.Series(list_nontagged[index: index + imagestoprocess]).apply(lambda x: path_ProcessedImages + x+'.png')
 
 # %% Move the determined images to the totag folder
 
