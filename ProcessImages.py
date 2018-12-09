@@ -295,7 +295,7 @@ for indexes in range(0, len(list_images), batch_size):
 
 # %%
 
-df_ProcessingDurations = pd.DataFrame(list_ProcessingDuration, index=list_imagenames)
+df_ProcessingDurations = pd.DataFrame(list_ProcessingDuration, index=list_images)
 df_ProcessingDurations.to_csv(filename_ProcessingDurations)
 
 # %%

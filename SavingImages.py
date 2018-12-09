@@ -11,7 +11,7 @@ import datetime
 import numpy as np
 
 # turns off
-BooleanWillImagesSave = False
+BooleanWillImagesSave = True
 
 # %% Setup paths
 
