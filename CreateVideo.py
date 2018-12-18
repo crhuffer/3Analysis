@@ -14,7 +14,7 @@ import numpy as np
 
 # %% Versions
 
-version = 'V2'
+version = 'V1'
 
 # %% Setup paths
 
@@ -59,6 +59,21 @@ def rotate_bound(image, angle):
 list_imagenamesfull = glob.glob(path_ProcessedImages + '*.png')
 list_imagenames = list(pd.Series(list_imagenamesfull).apply(lambda x: os.path.basename(x)))
 
+# %% Compare human tagged to Yolo Version
+
+
+list_humantags = glob.glob(path_HumanTaggedImages + '*.txt')
+list_yolotags = glob.glob(path_YOLOTaggedImagesCurrentVersion + '*.txt')
+list_humanimages = glob.glob(path_ProcessedImages + '*.png')
+
+list_humantags_basename = [os.path.basename(name)[:-4] for name in list_humantags]
+list_yolotags_basename = [os.path.basename(name)[:-4] for name in list_yolotags]
+
+
+columns = ['index', 'x_center', 'y_center', 'width', 'height',
+                   'confidence', 'other1', 'class']
+columns_humantag = ['class', 'x_topleft', 'y_topleft', 'width', 'height']
+
 # %% Grab the detector number and datetime
 
 df_images = pd.DataFrame(list_imagenames, columns=['imagenames'])
@@ -70,7 +85,7 @@ df_images['datetime'] = pd.to_datetime(df_images['imagenames'].apply(lambda x: x
 
 df_images.sort_values(by=['datetime', 'detector'], inplace=True)
 
-# %% Make a timedelta 
+# %% Make a timedelta
 
 #df_images['timedelta'] = 0
 
@@ -121,7 +136,7 @@ for session_index, df_session in groups:
     list_sessionframes.append(len(df_session))
 
 # %% Save the properties of the sessions to a sessions dataframe
-    
+
 df_sessions = pd.DataFrame(list_sessiondurations, columns=['duration'])
 df_sessions['frames'] = list_sessionframes
 df_sessions['datetime_start'] = list_sessionstart
@@ -138,9 +153,34 @@ list_filenamesD1 = list(df_session.loc[indexer, 'filename'])
 # %%
 
 for index in range(len(list_filenamesD0)):
-    imgD0 = cv2.imread(list_filenamesD0[index])
-    imgD1 = cv2.imread(list_filenamesD1[index])
-    
+    filenameD0 = list_filenamesD0[index]
+    imgD0 = cv2.imread(filenameD0)
+    filenameD1 = list_filenamesD1[index]
+    imgD1 = cv2.imread(filenameD1)
+
+
+#    humantag = path_HumanTaggedImages + os.path.basename(imagename)[:-4] + '.txt'
+    yolotagD0 = path_YOLOTaggedImagesCurrentVersion + os.path.basename(filenameD0)[:-4]+ '.txt'
+    yolotagD1 = path_YOLOTaggedImagesCurrentVersion + os.path.basename(filenameD1)[:-4]+ '.txt'
+
+    df_yolotagD0 = pd.read_csv(yolotagD0, header=0)
+    indexer = df_yolotagD0['class'] == 0
+    df_yolotagD0 = df_yolotagD0.loc[indexer, :]
+
+    # handle the case where nothing was predicted.
+    if len(df_yolotagD0) > 0:
+        c1_2, c2_2 = tuple([int(x) for x in df_yolotagD0.iloc[0, 1:3]]), tuple([int(x) for x in df_yolotagD0.iloc[0, 3:5]])
+        cv2.rectangle(imgD0, c1_2, c2_2, (0,255,0), 1)
+
+    df_yolotagD1 = pd.read_csv(yolotagD1, header=0)
+    indexer = df_yolotagD1['class'] == 0
+    df_yolotagD1 = df_yolotagD1.loc[indexer, :]
+
+    # handle the case where nothing was predicted.
+    if len(df_yolotagD1) > 0:
+        c1_2, c2_2 = tuple([int(x) for x in df_yolotagD1.iloc[0, 1:3]]), tuple([int(x) for x in df_yolotagD1.iloc[0, 3:5]])
+        cv2.rectangle(imgD1, c1_2, c2_2, (0,255,0), 1)
+
     imgD1 = np.pad(imgD1, pad_width=((0, 160), (0, 0), (0, 0)), mode='minimum')
 #    angle=90
 #    frame1_rotated = rotate_bound(imgD0, angle)
@@ -154,7 +194,8 @@ for index in range(len(list_filenamesD0)):
 #        print(frame1_rotated.shape, frame2_rotated.shape)
 #        cv2.imshow("frame", np.concatenate((cv2.getRotationMatrix2D(frame1, 90, 1), cv2.getRotationMatrix2D(frame2, 90, 1)), axis=1))
 #        cv2.imshow("frame", np.concatenate((frame1_rotated, frame2_rotated), axis=1))
+
     cv2.imshow("frame", np.concatenate((imgD0, imgD1), axis=1))
 #        cv2.imshow('frame', frame1)
     key = cv2.waitKey(1)
-    
+
