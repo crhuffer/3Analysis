@@ -31,10 +31,6 @@ import re
 import os
 # import shutil
 
-# %% Move files to the ImagesToProcessFolder
-
-import MoveImagesForProcessing
-
 # %% Current local version
 
 #version = 'V1'
@@ -53,6 +49,20 @@ path_Predictions = "../5Predictions/"
 
 filename_Predictions = path_Predictions + 'Predictions.csv'
 filename_ProcessingDurations = path_Predictions + "ProcessingDurations.csv"
+
+# %% Move files to the ImagesToProcessFolder
+
+import MoveImagesForProcessing
+
+# Looks for images that are in processed images, but not in YoloCurrenVersion
+boolean_MoveMissedImages = True
+
+if boolean_MoveMissedImages:
+    list_FilenamesToMove = MoveImagesForProcessing.GetMissedImagesForProcessing(path_ProcessedImages, path_YOLOTaggedImagesCurrentVersion, path_ImagesToProcess)
+#    list_FilenamesToMove = list_FilenamesToMove[:50]
+    MoveImagesForProcessing.MoveImagesForProcessing(list_FilenamesToMove, path_ImagesToProcess)
+
+
 # %%
 
 # layer_type_dic, module_list = create_module(blocks)
@@ -339,3 +349,5 @@ print("----------------------------------------------------------")
 
 if cuda:
     torch.cuda.empty_cache()
+
+
